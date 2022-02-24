@@ -42,11 +42,16 @@
             <artifactId>log4j-to-slf4j</artifactId>
             <version>2.17.0</version>
         </dependency>
-
+        <!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+            <version>1.1.10</version>
+        </dependency>
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
-            <version>1.2.62</version>
+            <version>1.2.79</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -78,29 +83,47 @@
             <artifactId>kafka-clients</artifactId>
             <version>3.0.0</version>
         </dependency>
+        <!-- 添加对应的 jackson-core -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.10.0</version>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.0.0</version>
-                <configuration>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>make-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+           <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-jar-plugin</artifactId>
+               <version>2.6</version>
+                   <configuration>
+                       <archive>
+                           <manifest>
+                               <addClasspath>true</addClasspath>
+                               <classpathPrefix>lib/</classpathPrefix>
+                                <mainClass>com.xxx.xxxService</mainClass>
+                            </manifest>
+                       </archive>
+                   </configuration>
+           </plugin>
+           <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-dependency-plugin</artifactId>
+               <version>2.10</version>
+               <executions>
+                   <execution>
+                       <id>copy-dependencies</id>
+                       <phase>package</phase>
+                       <goals>
+                           <goal>copy-dependencies</goal>
+                       </goals>
+                       <configuration>
+                           <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                       </configuration>
+                   </execution>
+               </executions>
+           </plugin>
 
             <!-- 该插件用于将 Scala 代码编译成 class 文件 -->
             <plugin>
