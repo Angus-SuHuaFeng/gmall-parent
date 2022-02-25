@@ -1,5 +1,6 @@
 package utils
 
+import bean.DauInfo
 import io.searchbox.client.config.HttpClientConfig
 import io.searchbox.client.{JestClient, JestClientFactory}
 import io.searchbox.core._
@@ -130,5 +131,29 @@ object MyESUtil {
     val toList: List[util.Map[String, Any]] = list.asScala.map(_.source).toList
     println(toList.mkString("\n"))
     jestClient.close()
+  }
+
+  /**
+   *  向ES中批量插入数据
+   * @param dauList 数据
+   * @param indexName 索引
+   */
+  def bulkInsert(dauList: List[DauInfo], indexName: String): Unit = {
+    if (dauList!=null && dauList.size>0){
+      val jestClient: JestClient = getJestClient()
+      // 创建批量操作对象
+      val builder = new Bulk.Builder()
+      for (source <- dauList){
+        val index: Index = new Index.Builder(source)
+          .index(indexName)
+          .`type`("_doc")
+          .build()
+        builder.addAction(index)
+      }
+      val bulk: Bulk = builder.build()
+      val bulkResult: BulkResult = jestClient.execute(bulk)
+      println("向ES中插入" + bulkResult.getItems.size() + "条数据")
+      jestClient.close()
+    }
   }
 }
