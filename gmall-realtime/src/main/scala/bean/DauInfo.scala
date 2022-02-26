@@ -1,6 +1,6 @@
 package bean
 
-  /**
+    /**
  * @author ：Angus
  * @date ：Created in 2022/2/25 11:36
  * @description： 日志数据样例类

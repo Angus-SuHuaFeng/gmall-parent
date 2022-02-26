@@ -138,15 +138,16 @@ object MyESUtil {
    * @param dauList 数据
    * @param indexName 索引
    */
-  def bulkInsert(dauList: List[DauInfo], indexName: String): Unit = {
+  def bulkInsert(dauList: List[(String, DauInfo)], indexName: String): Unit = {
     if (dauList!=null && dauList.size>0){
       val jestClient: JestClient = getJestClient()
       // 创建批量操作对象
       val builder = new Bulk.Builder()
-      for (source <- dauList){
+      for ((id,source) <- dauList){
         val index: Index = new Index.Builder(source)
           .index(indexName)
           .`type`("_doc")
+          .id(id)
           .build()
         builder.addAction(index)
       }
