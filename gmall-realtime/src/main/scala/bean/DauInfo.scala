@@ -13,5 +13,7 @@ case class DauInfo(
                     vc:String,//版本
                     var dt:String,//日期
                     var hr:String,//小时
+                    var min:String,//分钟
+                    var sec:String,//秒
                     ts:Long //时间戳
                   ){}

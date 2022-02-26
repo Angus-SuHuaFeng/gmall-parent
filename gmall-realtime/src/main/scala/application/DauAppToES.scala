@@ -13,12 +13,12 @@ import java.lang
 import java.text.SimpleDateFormat
 import java.util.Date
 
-/**
+  /**
  * @author ：Angus
  * @date ：Created in 2022/2/25 10:08
- * @description：
+ * @description： 添加将数据批量保存到ES中的功能
  */
-object DauApp2 {
+object DauAppToES {
   def main(args: Array[String]): Unit = {
     // 创建SparkStreaming环境
     val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("DauApp")
@@ -41,9 +41,15 @@ object DauApp2 {
         val timeStamp: String = sdf.format(new Date(ts))
         val tsArray: Array[String] = timeStamp.split(" ")
         val date: String = tsArray(0)
-        val hour: String = tsArray(1)
+        val time: String = tsArray(1)
         jSONObject.put("date", date)
+        val timeArr: Array[String] = time.split(":")
+        val hour: String = timeArr(0)
+        val min: String = timeArr(1)
+        val sec: String = timeArr(2)
         jSONObject.put("hour", hour)
+        jSONObject.put("min", min)
+        jSONObject.put("sec", sec)
         jSONObject
       }
     )
@@ -92,7 +98,7 @@ object DauApp2 {
         // 以分区为单位进行数据处理
         rdd.foreachPartition{
           jsonObjItr: Iterator[JSONObject] => {
-            val dauList: List[DauInfo] = jsonObjItr.map {
+            val dauList: List[(String, DauInfo)] = jsonObjItr.map {
               jsonObj: JSONObject => {
                 val jSONObject: JSONObject = jsonObj.getJSONObject("common")
                 val dauInfo: DauInfo = DauInfo(
@@ -103,14 +109,16 @@ object DauApp2 {
                   jSONObject.getString("vc"),
                   jsonObj.getString("date"),
                   jsonObj.getString("hour"),
+                  jsonObj.getString("min"),
+                  jsonObj.getString("sec"),
                   jsonObj.getLong("ts")
                 )
                 println(dauInfo)
-                dauInfo
+                (dauInfo.mid,dauInfo)
               }
             }.toList
             val dt: String = new SimpleDateFormat("yyyy-MM-dd").format(new Date())
-            MyESUtil.bulkInsert(dauList, "gmall_dau_info" + dt)
+            MyESUtil.bulkInsert(dauList, "gmall_dau_info_" + dt)
           }
         }
       }

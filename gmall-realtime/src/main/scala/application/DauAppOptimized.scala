@@ -21,7 +21,7 @@ import java.util.Date
  * @date ：Created in 2022/2/25 10:08
  * @description： 实现精准一次性消费: 手动提交偏移量 + 利用ES的幂等性
  */
-object DauApp3 {
+object DauAppOptimized {
   def main(args: Array[String]): Unit = {
     // 创建SparkStreaming环境
     val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("DauApp")
@@ -63,12 +63,19 @@ object DauApp3 {
         val timeStamp: String = sdf.format(new Date(ts))
         val tsArray: Array[String] = timeStamp.split(" ")
         val date: String = tsArray(0)
-        val hour: String = tsArray(1)
+        val time: String = tsArray(1)
         jSONObject.put("date", date)
+        val timeArr: Array[String] = time.split(":")
+        val hour: String = timeArr(0)
+        val min: String = timeArr(1)
+        val sec: String = timeArr(2)
         jSONObject.put("hour", hour)
+        jSONObject.put("min", min)
+        jSONObject.put("sec", sec)
         jSONObject
       }
     )
+    jsonDS.print(100)
     // 使用Redis对jsonDs去重
     val mapParDS: DStream[JSONObject] = jsonDS.mapPartitions {
       jsonObjectIter: Iterator[JSONObject] => {
@@ -126,15 +133,16 @@ object DauApp3 {
                   jSONObject.getString("vc"),
                   jsonObj.getString("date"),
                   jsonObj.getString("hour"),
+                  jsonObj.getString("min"),
+                  jsonObj.getString("sec"),
                   jsonObj.getLong("ts")
-
                 )
                 println(dauInfo)
                 (dauInfo.mid, dauInfo)
               }
             }.toList
             val dt: String = new SimpleDateFormat("yyyy-MM-dd").format(new Date())
-            MyESUtil.bulkInsert(dauList, "gmall_dau_info" + dt)
+            MyESUtil.bulkInsert(dauList, "gmall_dau_info_" + dt)
           }
         }
         // 分批次提交偏移量
