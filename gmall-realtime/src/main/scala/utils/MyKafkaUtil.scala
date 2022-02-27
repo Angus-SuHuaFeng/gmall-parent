@@ -1,6 +1,7 @@
 package utils
 
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.streaming.StreamingContext
@@ -67,5 +68,41 @@ object MyKafkaUtil {
       LocationStrategies.PreferConsistent,
       ConsumerStrategies.Subscribe[String,String](Array(topic),kafkaParam,offsets))
     dStream
+  }
+
+  var kafkaProducer : KafkaProducer[String, String] = null
+
+  def createKafkaProducer(): Unit ={
+    val prop = new Properties()
+    prop.put("bootstrap.servers", broker_list)
+    prop.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+    prop.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+    prop.put("enable.idempotence",(true: java.lang.Boolean))
+    try
+      kafkaProducer = new KafkaProducer[String,String](prop)
+    catch{
+      case e: Exception => e.printStackTrace()
+    }
+    }
+
+  def getKafkaProducer: KafkaProducer[String, String] ={
+    if (kafkaProducer==null){
+      createKafkaProducer()
+    }
+    kafkaProducer
+  }
+
+  def send(kafkaProducer: KafkaProducer[String, String], topic: String, msg: String): Unit ={
+    if (kafkaProducer==null){
+      createKafkaProducer()
+    }
+    kafkaProducer.send(new ProducerRecord[String, String](topic, msg))
+  }
+
+  def send(kafkaProducer: KafkaProducer[String, String], topic: String, key: String, msg: String): Unit ={
+    if (kafkaProducer==null){
+      createKafkaProducer()
+    }
+    kafkaProducer.send(new ProducerRecord[String, String](topic, key, msg))
   }
 }

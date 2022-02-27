@@ -25,7 +25,7 @@ object DauAppToES {
     val ssc = new StreamingContext(sparkConf, Seconds(3))
 
     val topic:String = "gmall_start"
-    val group:String = "mall_dau"
+    val group:String = "gmall_dau"
     // 通过SparkStreaming程序从Kafka中读取数据
     val kafkaDS: InputDStream[ConsumerRecord[String, String]] = MyKafkaUtil.getKafkaStream(topic, ssc, group)
     // 从kafka中读取Json

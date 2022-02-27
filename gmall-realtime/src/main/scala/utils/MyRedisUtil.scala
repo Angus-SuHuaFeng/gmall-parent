@@ -2,6 +2,8 @@ package utils
 
 import redis.clients.jedis.{Jedis, JedisPool, JedisPoolConfig}
 
+import java.util.Properties
+
 /**
  * @author ：Angus
  * @date ：Created in 2022/2/24 14:01
@@ -9,21 +11,21 @@ import redis.clients.jedis.{Jedis, JedisPool, JedisPoolConfig}
  */
 object MyRedisUtil {
   // 定义一个连接对象
-  private var jedisPool: JedisPool = null
+  private var jedisPool: JedisPool = _
 
   // 获取Jedis客户端
-  def getJedisClient() : Jedis = {
+  def getJedisClient: Jedis = {
     if (jedisPool==null){
       build()
     }
     jedisPool.getResource
   }
   // 创建jedisPool连接对象
-  def build()={
+  def build(): Unit ={
     val jedisPoolConfig = new JedisPoolConfig()
-    val prop = MyPropertiesUtil.load("config.properties")
-    val host = prop.getProperty("redis.host")
-    val port = prop.getProperty("redis.port")
+    val prop: Properties = MyPropertiesUtil.load("config.properties")
+    val host: String = prop.getProperty("redis.host")
+    val port: String = prop.getProperty("redis.port")
     jedisPoolConfig.setMaxTotal(100) //最大连接数
     jedisPoolConfig.setMaxIdle(20) //最大空闲
     jedisPoolConfig.setMinIdle(20) //最小空闲
@@ -34,7 +36,7 @@ object MyRedisUtil {
   }
 
   def main(args: Array[String]): Unit = {
-    val jedis: Jedis = getJedisClient()
+    val jedis: Jedis = getJedisClient
     println(jedis.ping())
 
   }
