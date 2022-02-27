@@ -36,6 +36,7 @@ object DauAppToES {
         val jSONObject: JSONObject = JSON.parseObject(jsonStr)
         // 从json对象中获取时间戳数据
         val ts: Long = jSONObject.getLong("ts")
+
         // 将Long类型的ts转换成特定时间格式 2022-2-24 10
         val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
         val timeStamp: String = sdf.format(new Date(ts))

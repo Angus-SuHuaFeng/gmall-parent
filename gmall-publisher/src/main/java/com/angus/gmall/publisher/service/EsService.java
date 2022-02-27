@@ -4,12 +4,18 @@ import com.angus.gmall.publisher.common.ESServiceInterface;
 import io.searchbox.client.JestClient;
 import io.searchbox.core.Search;
 import io.searchbox.core.SearchResult;
+import io.searchbox.core.search.aggregation.TermsAggregation;
 import org.elasticsearch.index.query.MatchAllQueryBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.elasticsearch.search.aggregations.support.ValueType;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -53,7 +59,32 @@ public class EsService implements ESServiceInterface {
     // 分时查询
     @Override
     public Map<String, Long> getDauHour(String date) {
-        return null;
+        Map<String, Long> hourMap = new HashMap<>();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        // ES聚合查询
+        TermsAggregationBuilder termsAggregationBuilder = new TermsAggregationBuilder("groupBy_hr", ValueType.LONG).field("hr.keyword").size(24);
+        sourceBuilder.aggregation(termsAggregationBuilder);
+        String query = sourceBuilder.toString();
+        String index = "gmall_dau_info_"+date+"-query";
+        Search search = new Search.Builder(query)
+                .addIndex(index)
+                .build();
+        try {
+            SearchResult searchResult = jestClient.execute(search);
+            TermsAggregation groupBy_hr = searchResult.getAggregations().getTermsAggregation("groupBy_hr");
+            if (groupBy_hr!=null){
+                List<TermsAggregation.Entry> buckets = groupBy_hr.getBuckets();
+                for (TermsAggregation.Entry  bucket : buckets) {
+                    String hr = bucket.getKey();
+                    Long count = bucket.getCount();
+                    hourMap.put(hr, count);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException("ES查询异常");
+        }
+        return hourMap;
     }
 
 

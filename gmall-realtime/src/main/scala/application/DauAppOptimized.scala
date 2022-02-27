@@ -16,7 +16,7 @@ import java.lang
 import java.text.SimpleDateFormat
 import java.util.Date
 
-  /**
+    /**
  * @author ：Angus
  * @date ：Created in 2022/2/25 10:08
  * @description： 实现精准一次性消费: 手动提交偏移量 + 利用ES的幂等性
@@ -75,7 +75,6 @@ object DauAppOptimized {
         jSONObject
       }
     )
-    jsonDS.print(100)
     // 使用Redis对jsonDs去重
     val mapParDS: DStream[JSONObject] = jsonDS.mapPartitions {
       jsonObjectIter: Iterator[JSONObject] => {
