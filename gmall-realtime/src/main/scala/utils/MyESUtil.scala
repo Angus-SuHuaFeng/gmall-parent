@@ -1,6 +1,6 @@
 package utils
 
-import bean.DauInfo
+import bean.{DauInfo, OrderInfo}
 import io.searchbox.client.config.HttpClientConfig
 import io.searchbox.client.{JestClient, JestClientFactory}
 import io.searchbox.core._
@@ -158,5 +158,24 @@ object MyESUtil {
     }
   }
 
+  def bulkInsertOrderInfo(dauList: List[(String, OrderInfo)], indexName: String): Unit = {
+    if (dauList!=null && dauList.size>0){
+      val jestClient: JestClient = getJestClient()
+      // 创建批量操作对象
+      val builder = new Bulk.Builder()
+      for ((id,source) <- dauList){
+        val index: Index = new Index.Builder(source)
+          .index(indexName)
+          .`type`("_doc")
+          .id(id)
+          .build()
+        builder.addAction(index)
+      }
+      val bulk: Bulk = builder.build()
+      val bulkResult: BulkResult = jestClient.execute(bulk)
+      println("向ES中插入" + bulkResult.getItems.size() + "条数据")
+      jestClient.close()
+    }
+  }
 
 }

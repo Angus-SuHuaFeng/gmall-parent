@@ -1,6 +1,6 @@
 package dwd
 
-import bean.{OrderInfo, ProvinceInfo, UserStatus}
+import bean.{OrderInfo, ProvinceInfo, UserInfo, UserStatus}
 import com.alibaba.fastjson.{JSON, JSONObject}
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -11,7 +11,10 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
-import utils.{MyKafkaUtil, MyPhoenixUtil, OffsetManagerUtil}
+import utils.{MyESUtil, MyKafkaUtil, MyPhoenixUtil, OffsetManagerUtil}
+
+import java.text.SimpleDateFormat
+import java.util.Date
 
 /**
  * @author ：Angus
@@ -133,31 +136,6 @@ object OrderInfoApp {
 
         }
       }
-
-      // ==========================维护首单用户状态===========================
-      // 如果当前用户为首单用户，那么我们应该将其标记后保存到HBase中，这样下次下单时就不是首单
-      import org.apache.phoenix.spark._
-      correctionDStream.foreachRDD {
-        rdd: RDD[OrderInfo] => {
-          // 过滤非首单的用户
-          val firstOrderRDD: RDD[OrderInfo] = rdd.filter(_.if_first_order == "1")
-          // 使用saveToPhoenix方法要求RDD的属性个数和Phoenix中的字段必须一致
-          val userStatusRDD: RDD[UserStatus] = firstOrderRDD.map {
-            orderInfo: OrderInfo => {
-              UserStatus(orderInfo.user_id.toString, "1")
-            }
-          }
-          userStatusRDD.saveToPhoenix(
-            "user_status",
-            Seq("USER_ID", "IF_CONSUMED"),
-            // Hadoop的配置
-            new Configuration,
-            Some("BigData1,BigData2,BigData3:2181")
-          )
-          OffsetManagerUtil.saveOffset(topic, groupId,offsetRanges)
-        }
-      }
-
       // ======================和省份维度表进行关联(方案一)=======================
       // 以分区为单位对订单进行处理，和Phoenix中的订单进行关联
 //      val orderInfoWithProvinceDStream: DStream[OrderInfo] = correctionDStream.mapPartitions {
@@ -189,6 +167,7 @@ object OrderInfoApp {
 //      }
 
       // ======================和省份维度表进行关联(方案二)=======================
+      // 使用广播变量，将sql在driver端执行
       val orderInfoWithProvinceDStream: DStream[OrderInfo] = correctionDStream.transform {
         rdd: RDD[OrderInfo] => {
           // 从Phoenix中查询所有的省份数据
@@ -218,6 +197,75 @@ object OrderInfoApp {
       }
       orderInfoWithProvinceDStream.print(100)
 
+      // ======================和用户维度表进行关联=======================
+      // 用户表数据量大，全放在Driver不合适，所以以分区为单位进行处理
+      val orderInfoWithUserInfoDStream: DStream[OrderInfo] = orderInfoWithProvinceDStream.mapPartitions {
+        orderInfoItr: Iterator[OrderInfo] => {
+          // 转换为List集合
+          val orderInfoList: List[OrderInfo] = orderInfoItr.toList
+          // 获取所有用户的ID
+          val user_id_list: List[Long] = orderInfoList.map(_.user_id)
+          // 根据ID拼接查询语句到Phoenix中查询
+          val sql = s"select ID,USER_LEVEL,BIRTHDAY,GENDER,AGE_GROUP,GENDER_NAME from gmall_user_info where ID in ('${user_id_list.mkString("','")}')"
+          val user_info_list: List[JSONObject] = MyPhoenixUtil.queryList(sql)
+          val userInfoMap: Map[String, UserInfo] = user_info_list.map {
+            user_info: JSONObject => {
+              val userInfo: UserInfo = JSON.toJavaObject(user_info, classOf[UserInfo])
+              (userInfo.id, userInfo)
+            }
+          }.toMap
+          for (orderInfo <- orderInfoList) {
+            val userInfo: UserInfo = userInfoMap.getOrElse(orderInfo.user_id.toString, null)
+            if (userInfo != null) {
+              orderInfo.user_age_group = userInfo.age_group
+              orderInfo.user_gender = userInfo.gender_name
+            }
+          }
+          orderInfoList.toIterator
+        }
+      }
+      orderInfoWithUserInfoDStream.print(100)
+
+      // ==========================维护首单用户状态===========================
+      // 如果当前用户为首单用户，那么我们应该将其标记后保存到HBase中，这样下次下单时就不是首单
+      import org.apache.phoenix.spark._
+      orderInfoWithUserInfoDStream.foreachRDD {
+        rdd: RDD[OrderInfo] => {
+          // 优化：rdd被多次使用，所以将rdd存入缓存
+          rdd.cache()
+          // 过滤非首单的用户
+          val firstOrderRDD: RDD[OrderInfo] = rdd.filter(_.if_first_order == "1")
+          // 使用saveToPhoenix方法要求RDD的属性个数和Phoenix中的字段必须一致
+          val userStatusRDD: RDD[UserStatus] = firstOrderRDD.map {
+            orderInfo: OrderInfo => {
+              UserStatus(orderInfo.user_id.toString, "1")
+            }
+          }
+          userStatusRDD.saveToPhoenix(
+            "user_status",
+            Seq("USER_ID", "IF_CONSUMED"),
+            // Hadoop的配置
+            new Configuration,
+            Some("BigData1,BigData2,BigData3:2181")
+          )
+          // ==========================保存订单数据到ES中=============
+          rdd.foreachPartition{
+            orderInfoItr: Iterator[OrderInfo] => {
+              val orderInfoList: List[(String, OrderInfo)] = orderInfoItr.toList.map((orderInfo: OrderInfo) => {(orderInfo.id.toString,orderInfo)})
+              val dateStr: String = new SimpleDateFormat("yyyyMMdd").format(new Date())
+              MyESUtil.bulkInsertOrderInfo(orderInfoList,"gmall_order_info_" + dateStr)
+
+
+
+
+            }
+          }
+
+
+
+          OffsetManagerUtil.saveOffset(topic, groupId,offsetRanges)
+        }
+      }
 
 
 //      orderInfoWithProvinceDStream.print(100)
