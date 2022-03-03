@@ -11,7 +11,7 @@ import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import utils.{MyKafkaUtil, OffsetManagerUtil}
 
-/**
+  /**
  * @author ：Angus
  * @date ：Created in 2022/2/27 22:08
  * @description： 通过Maxwell将数据导入Kafka再进行分流处理
@@ -53,10 +53,23 @@ object BaseDBMaxwellApp {
           rdd.foreach{
             jsonObj: JSONObject => {
               val operationType: String = jsonObj.getString("type")
+              val tableName: String = jsonObj.getString("table")
               val dataJSONObject: JSONObject = jsonObj.getJSONObject("data")
+//              if(dataJSONObject!=null && !dataJSONObject.isEmpty) {
+//                if (
+//                  ("order_info".equals(tableName) && "bootstrap-insert".equals(operationType))
+//                    || (tableName.equals("order_detail") && "bootstrap-insert".equals(operationType))
+//                    || tableName.equals("base_province")
+//                    || tableName.equals("user_info")
+//                    || tableName.equals("sku_info")
+//                    || tableName.equals("base_trademark")
+//                    || tableName.equals("base_category3")
+//                    || tableName.equals("spu_info")
+//                )
+//              }
               // maxwell中为小写
-              if ("insert".equals(operationType) && !dataJSONObject.isEmpty && dataJSONObject !=null){
-                val tableName: String = jsonObj.getString("table")
+              if ("bootstrap-insert".equals(operationType) || "update".equals(operationType) ||
+                  "insert".equals(operationType) && !dataJSONObject.isEmpty && dataJSONObject !=null){
                 // 拼接要发送的主题
                 val topicName: String = "ods_" + tableName
                 val producer: KafkaProducer[String, String] = MyKafkaUtil.getKafkaProducer

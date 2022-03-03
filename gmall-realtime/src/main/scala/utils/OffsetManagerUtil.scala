@@ -15,7 +15,7 @@ object OffsetManagerUtil {
   // 从Redis中获取偏移量 type:  key:  offset:topic:groupid    field:partition  value:  偏移量
     def getOffset(topic: String, groupId: String): Map[TopicPartition,Long]={
       // 获取客户端连接
-      val jedis: Jedis = MyRedisUtil.getJedisClient()
+      val jedis: Jedis = MyRedisUtil.getJedisClient
       // 拼接操作Redis的Key
       var offsetKey: String = "offset:" + topic + ":" + groupId
       // 获取当前消费者组消费的主题  对应的分区以及偏移量
@@ -48,7 +48,7 @@ object OffsetManagerUtil {
     }
 
     if (offsetMap!=null&&offsetMap.size()>0){
-      val jedis: Jedis = MyRedisUtil.getJedisClient()
+      val jedis: Jedis = MyRedisUtil.getJedisClient
       jedis.hmset(offsetKey, offsetMap)
       jedis.close()
     }

@@ -56,7 +56,7 @@ object DauAppToES {
     )
     val mapParDS: DStream[JSONObject] = jsonDS.mapPartitions {
       jsonObjectIter: Iterator[JSONObject] => {
-        val jedis: Jedis = MyRedisUtil.getJedisClient()
+        val jedis: Jedis = MyRedisUtil.getJedisClient
         val filterIter: Iterator[JSONObject] = jsonObjectIter.filter {
           jsonObject: JSONObject => {
             // 获取日期
@@ -66,7 +66,7 @@ object DauAppToES {
             // 拼接保存到Redis中的key
             val key: String = "dau:" + dateStr
             // 获取Redis客户端
-            val jedis: Jedis = MyRedisUtil.getJedisClient()
+            val jedis: Jedis = MyRedisUtil.getJedisClient
             // 从redis判断是否重复
             val isFirst: lang.Long = jedis.sadd(key, midStr)
 
