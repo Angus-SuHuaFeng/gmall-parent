@@ -1,6 +1,6 @@
 package dim
 
-import bean.ProvinceInfo
+import bean.{ProvinceInfo, SpuInfo}
 import com.alibaba.fastjson.JSON
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -43,14 +43,14 @@ object SpuInfoApp {
     import org.apache.phoenix.spark._
     offsetDStream.foreachRDD{
       rdd: RDD[ConsumerRecord[String, String]] => {
-        val provinceInfoRDD: RDD[ProvinceInfo] = rdd.map {
+        val SpuInfoInfoRDD: RDD[SpuInfo] = rdd.map {
           record: ConsumerRecord[String, String] => {
             val jsonStr: String = record.value()
-            val provinceInfo: ProvinceInfo = JSON.parseObject(jsonStr, classOf[ProvinceInfo])
-            provinceInfo
+            val SpuInfoInfo: SpuInfo = JSON.parseObject(jsonStr, classOf[SpuInfo])
+            SpuInfoInfo
           }
         }
-        provinceInfoRDD.saveToPhoenix(
+        SpuInfoInfoRDD.saveToPhoenix(
           "GMALL_SPU_INFO",
           Seq("ID", "SPU_NAME"),
           new Configuration(),

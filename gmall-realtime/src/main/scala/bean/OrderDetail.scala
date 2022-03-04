@@ -12,7 +12,8 @@ case class OrderDetail(id: Long,
                        sku_num:Long,
                        sku_name: String,
                        create_time: String,
-                       var spu_id: Long, //作为维度数据 要关联进来 
+
+                       var spu_id: Long, //作为维度数据 要关联进来
                        var tm_id: Long,
                        var category3_id: Long,
                        var spu_name: String,

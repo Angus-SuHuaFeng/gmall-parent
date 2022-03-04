@@ -1,6 +1,7 @@
 package dwd
 
 import bean.{OrderInfo, ProvinceInfo, UserInfo, UserStatus}
+import com.alibaba.fastjson.serializer.SerializeConfig
 import com.alibaba.fastjson.{JSON, JSONObject}
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -11,10 +12,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
-import utils.{MyESUtil, MyKafkaUtil, MyPhoenixUtil, OffsetManagerUtil}
-
-import java.text.SimpleDateFormat
-import java.util.Date
+import utils.{MyKafkaUtil, MyPhoenixUtil, OffsetManagerUtil}
 
 /**
  * @author ：Angus
@@ -62,22 +60,22 @@ object OrderInfoApp {
 
       // ===========================判断是否为首单 方案1==========================
       // 每一条订单数据都要执行一个SQL语句，性能消耗太大
-      val firstOrderFlagDStream: DStream[Unit] = orderInfoDStream.map {
-        orderInfo: OrderInfo => {
-          // 获取用户ID
-          val user_id: Long = orderInfo.user_id
-          // 根据用户id通过Phoenix查询Hbase中的数据，判断是否下过单
-          val sql = s"select user_id , if_consumed from user_status where userid = '${user_id}' "
-          val userStatusInfo: List[JSONObject] = MyPhoenixUtil.queryList(sql)
-          if (userStatusInfo != null && userStatusInfo.nonEmpty) {
-            orderInfo.if_first_order = "0"
-          } else {
-            orderInfo.if_first_order = "1"
-          }
-        }
-      }
+//      val firstOrderFlagDStream: DStream[Unit] = orderInfoDStream.map {
+//        orderInfo: OrderInfo => {
+//          // 获取用户ID
+//          val user_id: Long = orderInfo.user_id
+//          // 根据用户id通过Phoenix查询Hbase中的数据，判断是否下过单
+//          val sql = s"select user_id , if_consumed from user_status where userid = '${user_id}' "
+//          val userStatusInfo: List[JSONObject] = MyPhoenixUtil.queryList(sql)
+//          if (userStatusInfo != null && userStatusInfo.nonEmpty) {
+//            orderInfo.if_first_order = "0"
+//          } else {
+//            orderInfo.if_first_order = "1"
+//          }
+//        }
+//      }
 
-      // ===========================首单  方案二=================================
+      // ===========================1. 首单  方案二=================================
       // 以分区为单位，将整个分区的数据拼接成一条SQL进行查询
       val firstOrderDStream: DStream[OrderInfo] = orderInfoDStream.mapPartitions {
         orderInfoItr: Iterator[OrderInfo] => {
@@ -101,7 +99,7 @@ object OrderInfoApp {
           orderInfoList.toIterator
         }
       }
-      /*一个采集周期状态修正：
+      /*2. 一个采集周期状态修正：
            应该将同一采集周期的同一用户的最早的订单标记为首单，其它都改为非首单
            ◼ 同一采集周期的同一用户-----按用户分组（groupByKey）
            ◼ 最早的订单-----排序，取最早（sortwith）
@@ -136,7 +134,7 @@ object OrderInfoApp {
 
         }
       }
-      // ======================和省份维度表进行关联(方案一)=======================
+      // ======================3. 和省份维度表进行关联(方案一)=======================
       // 以分区为单位对订单进行处理，和Phoenix中的订单进行关联
 //      val orderInfoWithProvinceDStream: DStream[OrderInfo] = correctionDStream.mapPartitions {
 //        orderInfoItr: Iterator[OrderInfo] => {
@@ -166,7 +164,7 @@ object OrderInfoApp {
 //        }
 //      }
 
-      // ======================和省份维度表进行关联(方案二)=======================
+      // ======================4. 和省份维度表进行关联(方案二)=======================
       // 使用广播变量，将sql在driver端执行
       val orderInfoWithProvinceDStream: DStream[OrderInfo] = correctionDStream.transform {
         rdd: RDD[OrderInfo] => {
@@ -197,7 +195,7 @@ object OrderInfoApp {
       }
       orderInfoWithProvinceDStream.print(100)
 
-      // ======================和用户维度表进行关联=======================
+      // ======================5. 和用户维度表进行关联=======================
       // 用户表数据量大，全放在Driver不合适，所以以分区为单位进行处理
       val orderInfoWithUserInfoDStream: DStream[OrderInfo] = orderInfoWithProvinceDStream.mapPartitions {
         orderInfoItr: Iterator[OrderInfo] => {
@@ -226,7 +224,7 @@ object OrderInfoApp {
       }
       orderInfoWithUserInfoDStream.print(100)
 
-      // ==========================维护首单用户状态===========================
+      // ==========================6. 维护首单用户状态===========================
       // 如果当前用户为首单用户，那么我们应该将其标记后保存到HBase中，这样下次下单时就不是首单
       import org.apache.phoenix.spark._
       orderInfoWithUserInfoDStream.foreachRDD {
@@ -248,25 +246,21 @@ object OrderInfoApp {
             new Configuration,
             Some("BigData1,BigData2,BigData3:2181")
           )
-          // ==========================保存订单数据到ES中=============
+          // ==========================7. 保存订单数据到ES中======================
           rdd.foreachPartition{
             orderInfoItr: Iterator[OrderInfo] => {
               val orderInfoList: List[(String, OrderInfo)] = orderInfoItr.toList.map((orderInfo: OrderInfo) => {(orderInfo.id.toString,orderInfo)})
-              val dateStr: String = new SimpleDateFormat("yyyyMMdd").format(new Date())
-              MyESUtil.bulkInsertOrderInfo(orderInfoList,"gmall_order_info_" + dateStr)
-
-
-
-
+//              val dateStr: String = new SimpleDateFormat("yyyyMMdd").format(new Date())
+//              MyESUtil.bulkInsertOrderInfo(orderInfoList,"gmall_order_info_" + dateStr)
+              //==========================8. 写回Kafka===========================
+              for ((orderInfoId, orderInfo) <- orderInfoList) {
+                MyKafkaUtil.send(MyKafkaUtil.getKafkaProducer, "dwd_order_info", JSON.toJSONString(orderInfo, new SerializeConfig(true)))
+              }
             }
           }
-
-
-
           OffsetManagerUtil.saveOffset(topic, groupId,offsetRanges)
         }
       }
-
 
 //      orderInfoWithProvinceDStream.print(100)
       ssc.start()

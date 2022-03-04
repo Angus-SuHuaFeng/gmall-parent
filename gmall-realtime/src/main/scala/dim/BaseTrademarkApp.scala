@@ -1,15 +1,15 @@
 package dim
 
-import bean.ProvinceInfo
+import bean.BaseTrademark
 import com.alibaba.fastjson.JSON
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
-import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
+import org.apache.spark.streaming.{Seconds, StreamingContext}
 import utils.{MyKafkaUtil, OffsetManagerUtil}
 
   /**
@@ -19,7 +19,7 @@ import utils.{MyKafkaUtil, OffsetManagerUtil}
  */
 object BaseTrademarkApp {
   def main(args: Array[String]): Unit = {
-    val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("ProvinceInfoApp")
+    val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("BaseTrademarkApp")
     val ssc = new StreamingContext(sparkConf, Seconds(3))
     val topic = "ods_base_trademark"
     val group = "dim_base_trademark_group"
@@ -31,7 +31,7 @@ object BaseTrademarkApp {
     }else {
       recordDStream = MyKafkaUtil.getKafkaStream(topic,ssc,group)
     }
-    var offsetRangesArray: Array[OffsetRange] = null
+    var offsetRangesArray: Array[OffsetRange] = Array.empty[OffsetRange]
     val offsetDStream: DStream[ConsumerRecord[String, String]] = recordDStream.transform {
       rdd: RDD[ConsumerRecord[String, String]] => {
         offsetRangesArray = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
@@ -43,14 +43,14 @@ object BaseTrademarkApp {
     import org.apache.phoenix.spark._
     offsetDStream.foreachRDD{
       rdd: RDD[ConsumerRecord[String, String]] => {
-        val provinceInfoRDD: RDD[ProvinceInfo] = rdd.map {
+        val BaseTrademarkInfoRDD: RDD[BaseTrademark] = rdd.map {
           record: ConsumerRecord[String, String] => {
             val jsonStr: String = record.value()
-            val provinceInfo: ProvinceInfo = JSON.parseObject(jsonStr, classOf[ProvinceInfo])
-            provinceInfo
+            val BaseTrademarkInfo: BaseTrademark = JSON.parseObject(jsonStr, classOf[BaseTrademark])
+            BaseTrademarkInfo
           }
         }
-        provinceInfoRDD.saveToPhoenix(
+        BaseTrademarkInfoRDD.saveToPhoenix(
           "GMALL_BASE_TRADEMARK",
           Seq("ID", "TM_NAME"),
           new Configuration(),

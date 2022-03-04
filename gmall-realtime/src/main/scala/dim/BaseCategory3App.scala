@@ -1,15 +1,15 @@
 package dim
 
-import bean.ProvinceInfo
+import bean.BaseCategory3
 import com.alibaba.fastjson.JSON
 import org.apache.hadoop.conf.Configuration
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
-import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
+import org.apache.spark.streaming.{Seconds, StreamingContext}
 import utils.{MyKafkaUtil, OffsetManagerUtil}
 
   /**
@@ -43,14 +43,14 @@ object BaseCategory3App {
     import org.apache.phoenix.spark._
     offsetDStream.foreachRDD{
       rdd: RDD[ConsumerRecord[String, String]] => {
-        val provinceInfoRDD: RDD[ProvinceInfo] = rdd.map {
+        val BaseCategory3InfoRDD: RDD[BaseCategory3] = rdd.map {
           record: ConsumerRecord[String, String] => {
             val jsonStr: String = record.value()
-            val provinceInfo: ProvinceInfo = JSON.parseObject(jsonStr, classOf[ProvinceInfo])
-            provinceInfo
+            val BaseCategory3Info: BaseCategory3 = JSON.parseObject(jsonStr, classOf[BaseCategory3])
+            BaseCategory3Info
           }
         }
-        provinceInfoRDD.saveToPhoenix(
+        BaseCategory3InfoRDD.saveToPhoenix(
           "GMALL_BASE_CATEGORY3",
           Seq("ID", "NAME", "CATEGORY2_ID"),
           new Configuration(),
