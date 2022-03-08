@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{HasOffsetRanges, OffsetRange}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
@@ -13,6 +14,7 @@ import redis.clients.jedis.Jedis
 import utils.{MyKafkaUtil, MyRedisUtil, OffsetManagerUtil}
 
 import java.lang
+import java.util.Properties
 import scala.collection.mutable.ListBuffer
 
 /**
@@ -22,6 +24,7 @@ import scala.collection.mutable.ListBuffer
  */
 object OrderWideApp {
   def main(args: Array[String]): Unit = {
+    import org.apache.spark
     val sparkConf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("OrderWideApp")
     val ssc = new StreamingContext(sparkConf, Seconds(4))
     val orderInfoTopic = "dwd_order_info"
@@ -131,7 +134,7 @@ object OrderWideApp {
             // 最后一条明细
             orderWide.final_detail_amount = Math.round((orderWide.final_total_amount - order_detail_sum) * 100D) / 100D
           } else {
-            orderWide.final_detail_amount = orderWide.final_total_amount * OriginAmount / orderWide.original_total_amount
+            orderWide.final_detail_amount = Math.round((orderWide.final_total_amount * OriginAmount / orderWide.original_total_amount) * 1000) / 1000
           }
           // 更新Redis中的值
           val newOriginAmount: Double = order_origin_sum + OriginAmount
@@ -144,8 +147,25 @@ object OrderWideApp {
       }
     }
 
-    orderWideDetailDStream.print(100)
-
+    //  向clickhouse中保存数据
+//    new JdbcRDD[]() 可以用于查询
+    // 使用sparkSql进行存储
+    val spark: SparkSession = SparkSession.builder().appName("spark_sql_orderWide").getOrCreate()
+    // 对DS中的RDD进行处理
+    import spark.implicits._
+    orderWideDetailDStream.foreachRDD{
+      rdd: RDD[OrderWide] => {
+        val df: DataFrame = rdd.toDF()
+        df.write.mode(SaveMode.Append)
+          .option("batchsize", "100")
+          .option("isolationLevel", "NONE")
+          .option("numPartitions","4")
+          .option("driver","ru.yandex.clickhouse.ClickHouseDriver")
+          .jdbc("jdbc:clickhouse://bigdata1:8123/default","t_order_wide",new Properties())
+        OffsetManagerUtil.saveOffset(orderInfoTopic, orderInfoGroup, orderInfoOffsetRangesArray)
+        OffsetManagerUtil.saveOffset(orderDetailTopic, orderDetailGroup, orderDetailOffsetRangesArray)
+      }
+    }
 
 
     ssc.start()

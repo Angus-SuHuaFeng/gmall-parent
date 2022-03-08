@@ -32,7 +32,7 @@ object DauAppOptimized {
     var recordDS: InputDStream[ConsumerRecord[String, String]] = null
     // 从Redis中获取偏移量
     val offSetMap: Map[TopicPartition, Long] = OffsetManagerUtil.getOffset(topic,group)
-    if (offSetMap!=null&&offSetMap.size>0){
+    if (offSetMap!=null&&offSetMap.nonEmpty){
       // 如果存在当前消费者组对该主题的偏移量信息，那么从偏移量的位置开始消费
        recordDS = MyKafkaUtil.getKafkaStream(topic, ssc, offSetMap, group)
     }else {
